@@ -5,12 +5,18 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let reader = SpacesPreferencesReader()
+    private let liveReader = LiveSpacesReader()
+    private let activeSpaceReader = ActiveSpaceReader()
     private let store = SpaceNameStore()
+    private let hud = SpaceChangeHUD()
 
     private var statusItem: NSStatusItem?
     private var spaces: [DesktopSpace] = []
     private var editWindow: NSWindow?
     private var refreshTimer: Timer?
+    private var activeSpaceRefreshTimers: [Timer] = []
+    private var currentManagedSpaceID: Int?
+    private var completedInitialRefresh = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -27,39 +33,92 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         refreshTimer = Timer.scheduledTimer(
-            timeInterval: 5,
+            timeInterval: 0.15,
             target: self,
             selector: #selector(timerRefresh),
             userInfo: nil,
             repeats: true
         )
 
-        refresh()
+        refresh(announceChanges: false)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         refreshTimer?.invalidate()
+        activeSpaceRefreshTimers.forEach { $0.invalidate() }
     }
 
     @objc private func activeSpaceDidChange() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            self?.refresh()
+        activeSpaceRefreshTimers.forEach { $0.invalidate() }
+        activeSpaceRefreshTimers.removeAll()
+
+        for delay in [0.02, 0.08, 0.16, 0.3, 0.55] {
+            let timer = Timer.scheduledTimer(
+                timeInterval: delay,
+                target: self,
+                selector: #selector(spaceChangeRefreshTimerFired),
+                userInfo: nil,
+                repeats: false
+            )
+            activeSpaceRefreshTimers.append(timer)
         }
+    }
+
+    @objc private func spaceChangeRefreshTimerFired(_ timer: Timer) {
+        activeSpaceRefreshTimers.removeAll { $0 === timer }
+        refresh(announceChanges: true)
     }
 
     @objc private func timerRefresh() {
-        refresh()
+        refresh(announceChanges: true)
     }
 
-    @objc private func refresh() {
-        do {
-            spaces = try reader.readDesktopSpaces()
-        } catch {
-            spaces = []
+    @objc private func manualRefresh() {
+        refresh(announceChanges: false)
+    }
+
+    private func refresh(announceChanges: Bool) {
+        let previousManagedSpaceID = currentManagedSpaceID
+        let activeManagedSpaceID = activeSpaceReader.activeSpaceID()
+        let matchingActiveManagedSpaceID: Int?
+
+        spaces = readSpaces()
+        matchingActiveManagedSpaceID = activeManagedSpaceID.flatMap { activeManagedSpaceID in
+            spaces.contains(where: { $0.managedSpaceID == activeManagedSpaceID }) ? activeManagedSpaceID : nil
         }
 
+        if let matchingActiveManagedSpaceID {
+            spaces = spaces.map { space in
+                space.markingCurrent(space.managedSpaceID == matchingActiveManagedSpaceID)
+            }
+        }
+
+        currentManagedSpaceID = spaces.first(where: \.isCurrent)?.managedSpaceID ?? matchingActiveManagedSpaceID
         statusItem?.button?.title = currentStatusTitle()
         rebuildMenu()
+
+        if
+            completedInitialRefresh,
+            announceChanges,
+            let currentManagedSpaceID,
+            currentManagedSpaceID != previousManagedSpaceID
+        {
+            announceCurrentSpaceChange()
+        }
+
+        completedInitialRefresh = true
+    }
+
+    private func readSpaces() -> [DesktopSpace] {
+        if let liveSpaces = liveReader.readDesktopSpaces() {
+            return liveSpaces
+        }
+
+        do {
+            return try reader.readDesktopSpaces()
+        } catch {
+            return []
+        }
     }
 
     @objc private func openNameEditor() {
@@ -72,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let viewModel = SpaceNamesViewModel(
             reader: reader,
             store: store,
-            onChange: { [weak self] in self?.refresh() },
+            onChange: { [weak self] in self?.refresh(announceChanges: false) },
             onClose: { [weak self] in self?.closeNameEditor() }
         )
 
@@ -144,7 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Rename Desktops...", action: #selector(openNameEditor), keyEquivalent: ","))
         menu.items.last?.target = self
-        menu.addItem(NSMenuItem(title: "Refresh", action: #selector(refresh), keyEquivalent: "r"))
+        menu.addItem(NSMenuItem(title: "Refresh", action: #selector(manualRefresh), keyEquivalent: "r"))
         menu.items.last?.target = self
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Spaces Renamer", action: #selector(quit), keyEquivalent: "q"))
@@ -169,6 +228,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         return title(for: currentSpace)
+    }
+
+    private func announceCurrentSpaceChange() {
+        guard let currentManagedSpaceID else {
+            return
+        }
+
+        if let currentSpace = spaces.first(where: { $0.managedSpaceID == currentManagedSpaceID }) {
+            hud.show(spaceTitle: title(for: currentSpace))
+        } else {
+            hud.show(spaceTitle: "Space \(currentManagedSpaceID)")
+        }
     }
 
     private func title(for space: DesktopSpace) -> String {

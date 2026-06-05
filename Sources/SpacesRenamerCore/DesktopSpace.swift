@@ -29,4 +29,15 @@ public struct DesktopSpace: Identifiable, Equatable {
         self.desktopIndex = desktopIndex
         self.isCurrent = isCurrent
     }
+
+    public func markingCurrent(_ isCurrent: Bool) -> DesktopSpace {
+        DesktopSpace(
+            managedSpaceID: managedSpaceID,
+            uuid: uuid,
+            displayIdentifier: displayIdentifier,
+            displayIndex: displayIndex,
+            desktopIndex: desktopIndex,
+            isCurrent: isCurrent
+        )
+    }
 }

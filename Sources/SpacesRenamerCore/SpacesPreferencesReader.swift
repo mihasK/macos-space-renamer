@@ -48,7 +48,11 @@ public final class SpacesPreferencesReader {
             throw SpacesPreferencesError.invalidPreferences
         }
 
-        return monitors.enumerated().flatMap { displayIndex, monitor in
+        return parseDesktopSpaces(fromMonitors: monitors)
+    }
+
+    public static func parseDesktopSpaces(fromMonitors monitors: [[String: Any]]) -> [DesktopSpace] {
+        monitors.enumerated().flatMap { displayIndex, monitor in
             parseMonitor(monitor, displayIndex: displayIndex)
         }
     }

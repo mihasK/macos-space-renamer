@@ -47,11 +47,13 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 - Lists detected desktop Spaces in the menu bar.
 - Shows the current desktop's local name in the menu bar.
+- Shows a small on-screen HUD when the current desktop changes.
 - Stores names locally by macOS managed Space ID.
-- Refreshes on Space changes and every few seconds.
+- Refreshes on Space changes and with a lightweight active-Space polling loop.
 
 ## Known Limitations
 
 - macOS does not expose a public API for true Mission Control Space renaming.
 - The desktop list comes from `~/Library/Preferences/com.apple.spaces.plist`, which is not a stable public contract.
+- Current desktop detection uses dynamically loaded private CoreGraphics symbols when available, then falls back to the plist state.
 - Space switching is intentionally not implemented yet.
