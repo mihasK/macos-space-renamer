@@ -10,7 +10,8 @@ This first version does not modify Mission Control labels. It reads the local Sp
 swift run SpacesRenamer
 ```
 
-The app runs as a menu bar item. Open the menu and choose **Rename Desktops...** to edit names.
+The app runs as a menu bar item. Open the menu and choose **Manage Names...** to edit names.
+Press `Shift` + `Command` + `G` to open the Spaces menu from anywhere.
 
 ## Build
 
@@ -48,6 +49,7 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 - Lists detected desktop Spaces in the menu bar.
 - Shows the current desktop's local name in the menu bar.
 - Allows inline renaming from the menu; click a Space number to switch, click its name to edit.
+- Opens the Spaces menu with a global `Shift` + `Command` + `G` shortcut.
 - Shows a small on-screen HUD when the current desktop changes.
 - Stores names locally by macOS managed Space ID.
 - Refreshes on Space changes and with a lightweight active-Space polling loop.

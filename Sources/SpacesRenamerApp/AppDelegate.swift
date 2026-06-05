@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var editWindow: NSWindow?
     private var refreshTimer: Timer?
     private var activeSpaceRefreshTimers: [Timer] = []
+    private var globalHotKey: GlobalHotKey?
+    private var globalHotKeyStatus = "Shortcut: ⇧⌘G"
     private var currentManagedSpaceID: Int?
     private var completedInitialRefresh = false
     private var isMenuOpen = false
@@ -43,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             repeats: true
         )
 
+        registerGlobalHotKey()
         refresh(announceChanges: false)
     }
 
@@ -78,6 +81,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func manualRefresh() {
         refresh(announceChanges: false)
+    }
+
+    private func registerGlobalHotKey() {
+        let hotKey = GlobalHotKey { [weak self] in
+            self?.openSpacesMenuFromShortcut()
+        }
+
+        do {
+            try hotKey.registerCommandShiftG()
+            globalHotKey = hotKey
+            globalHotKeyStatus = "Shortcut: ⇧⌘G"
+        } catch {
+            globalHotKey = nil
+            globalHotKeyStatus = "Shortcut unavailable"
+        }
+    }
+
+    private func openSpacesMenuFromShortcut() {
+        if isMenuOpen {
+            statusItem?.menu?.cancelTracking()
+            return
+        }
+
+        refresh(announceChanges: false)
+        rebuildMenuIfNeeded(force: true)
+        statusItem?.button?.performClick(nil)
     }
 
     private func refresh(announceChanges: Bool) {
@@ -245,6 +274,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.items.last?.target = self
         menu.addItem(NSMenuItem(title: "Refresh", action: #selector(manualRefresh), keyEquivalent: "r"))
         menu.items.last?.target = self
+        let shortcutItem = NSMenuItem(title: globalHotKeyStatus, action: nil, keyEquivalent: "")
+        shortcutItem.isEnabled = false
+        menu.addItem(shortcutItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Spaces Renamer", action: #selector(quit), keyEquivalent: "q"))
         menu.items.last?.target = self
