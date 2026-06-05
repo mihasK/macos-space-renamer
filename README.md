@@ -18,6 +18,19 @@ The app runs as a menu bar item. Open the menu and choose **Rename Desktops...**
 swift build
 ```
 
+## Package
+
+```sh
+./scripts/package-app.sh
+open -n dist/SpacesRenamer.app
+```
+
+Use a release build with:
+
+```sh
+CONFIGURATION=release ./scripts/package-app.sh
+```
+
 ## Test
 
 ```sh
