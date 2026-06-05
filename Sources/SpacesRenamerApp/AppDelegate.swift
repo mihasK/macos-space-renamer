@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let reader = SpacesPreferencesReader()
     private let liveReader = LiveSpacesReader()
     private let activeSpaceReader = ActiveSpaceReader()
+    private let switcher = SpaceSwitcher()
     private let store = SpaceNameStore()
     private let hud = SpaceChangeHUD()
 
@@ -17,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var activeSpaceRefreshTimers: [Timer] = []
     private var currentManagedSpaceID: Int?
     private var completedInitialRefresh = false
+    private var isMenuOpen = false
+    private var renderedMenuSnapshot: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -95,7 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         currentManagedSpaceID = spaces.first(where: \.isCurrent)?.managedSpaceID ?? matchingActiveManagedSpaceID
         statusItem?.button?.title = currentStatusTitle()
-        rebuildMenu()
+        rebuildMenuIfNeeded()
 
         if
             completedInitialRefresh,
@@ -161,12 +164,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openNameEditor()
     }
 
+    private func renameSpace(_ space: DesktopSpace, name: String) {
+        store.setName(name, for: space.managedSpaceID)
+        statusItem?.button?.title = currentStatusTitle()
+    }
+
+    private func switchToSpace(_ space: DesktopSpace) {
+        statusItem?.menu?.cancelTracking()
+
+        if switcher.switchToSpace(space) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                self?.refresh(announceChanges: true)
+            }
+        } else {
+            NSSound.beep()
+        }
+    }
+
     @objc private func quit() {
         NSApp.terminate(nil)
     }
 
+    private func rebuildMenuIfNeeded(force: Bool = false) {
+        guard !isMenuOpen else {
+            return
+        }
+
+        let snapshot = menuSnapshot()
+
+        guard force || snapshot != renderedMenuSnapshot else {
+            return
+        }
+
+        rebuildMenu()
+        renderedMenuSnapshot = snapshot
+    }
+
     private func rebuildMenu() {
         let menu = NSMenu()
+        menu.delegate = self
 
         if spaces.isEmpty {
             let item = NSMenuItem(title: "No desktops found", action: nil, keyEquivalent: "")
@@ -187,13 +223,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 for space in group.spaces {
-                    let currentMarker = space.isCurrent ? "✓ " : ""
-                    let item = NSMenuItem(
-                        title: "\(currentMarker)\(space.defaultTitle): \(title(for: space))",
-                        action: #selector(renameSpaceFromMenu(_:)),
-                        keyEquivalent: ""
+                    let item = NSMenuItem()
+                    item.view = SpacesMenuRowView(
+                        space: space,
+                        name: store.name(for: space.managedSpaceID) ?? "",
+                        onSwitch: { [weak self] space in
+                            self?.switchToSpace(space)
+                        },
+                        onRename: { [weak self] space, name in
+                            self?.renameSpace(space, name: name)
+                        }
                     )
-                    item.target = self
                     item.representedObject = space.managedSpaceID
                     menu.addItem(item)
                 }
@@ -201,7 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Rename Desktops...", action: #selector(openNameEditor), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: "Manage Names...", action: #selector(openNameEditor), keyEquivalent: ","))
         menu.items.last?.target = self
         menu.addItem(NSMenuItem(title: "Refresh", action: #selector(manualRefresh), keyEquivalent: "r"))
         menu.items.last?.target = self
@@ -210,6 +250,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.items.last?.target = self
 
         statusItem?.menu = menu
+    }
+
+    private func menuSnapshot() -> String {
+        spaces
+            .sorted { lhs, rhs in
+                if lhs.displayIndex == rhs.displayIndex {
+                    return lhs.desktopIndex < rhs.desktopIndex
+                }
+
+                return lhs.displayIndex < rhs.displayIndex
+            }
+            .map { space in
+                [
+                    space.displayIdentifier,
+                    "\(space.managedSpaceID)",
+                    "\(space.desktopIndex)",
+                    space.isCurrent ? "current" : "",
+                    store.name(for: space.managedSpaceID) ?? ""
+                ].joined(separator: ":")
+            }
+            .joined(separator: "|")
     }
 
     private func groupedSpaces() -> [(displayIdentifier: String, displayIndex: Int, spaces: [DesktopSpace])] {
@@ -243,7 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func title(for space: DesktopSpace) -> String {
-        store.name(for: space.managedSpaceID) ?? space.defaultTitle
+        store.name(for: space.managedSpaceID) ?? space.numberTitle
     }
 
     private func displayTitle(for identifier: String, index: Int) -> String {
@@ -256,5 +317,17 @@ extension AppDelegate: NSWindowDelegate {
         if notification.object as? NSWindow === editWindow {
             editWindow = nil
         }
+    }
+}
+
+extension AppDelegate: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        isMenuOpen = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isMenuOpen = false
+        renderedMenuSnapshot = nil
+        refresh(announceChanges: false)
     }
 }

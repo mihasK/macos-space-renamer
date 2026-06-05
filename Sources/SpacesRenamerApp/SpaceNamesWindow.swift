@@ -15,7 +15,7 @@ struct SpaceNamesWindow: View {
             }
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
+                LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(viewModel.spaces) { space in
                         SpaceNameRow(
                             space: space,
@@ -45,10 +45,10 @@ struct SpaceNamesWindow: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Desktop Names")
+            Text("Spaces")
                 .font(.title2.weight(.semibold))
 
-            Text("Names are stored locally and shown in the menu bar.")
+            Text("Rename spaces locally. Use the menu number to switch.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -61,13 +61,19 @@ private struct SpaceNameRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(space.defaultTitle)
-                .font(.body.monospacedDigit())
-                .foregroundStyle(space.isCurrent ? .primary : .secondary)
-                .frame(width: 92, alignment: .leading)
+            Text(space.numberTitle)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(space.isCurrent ? .white : .primary)
+                .frame(width: 28, height: 24)
+                .background(space.isCurrent ? Color.accentColor : Color.secondary.opacity(0.14))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            TextField(space.defaultTitle, text: $name)
+            TextField("Name this space", text: $name)
                 .textFieldStyle(.roundedBorder)
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(space.isCurrent ? Color.accentColor.opacity(0.12) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }

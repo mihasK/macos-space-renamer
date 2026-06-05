@@ -47,6 +47,7 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 - Lists detected desktop Spaces in the menu bar.
 - Shows the current desktop's local name in the menu bar.
+- Allows inline renaming from the menu; click a Space number to switch, click its name to edit.
 - Shows a small on-screen HUD when the current desktop changes.
 - Stores names locally by macOS managed Space ID.
 - Refreshes on Space changes and with a lightweight active-Space polling loop.

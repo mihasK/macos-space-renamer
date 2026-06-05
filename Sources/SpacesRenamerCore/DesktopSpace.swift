@@ -14,6 +14,10 @@ public struct DesktopSpace: Identifiable, Equatable {
         "Desktop \(desktopIndex + 1)"
     }
 
+    public var numberTitle: String {
+        "\(desktopIndex + 1)"
+    }
+
     public init(
         managedSpaceID: Int,
         uuid: String?,

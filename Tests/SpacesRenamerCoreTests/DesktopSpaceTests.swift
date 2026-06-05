@@ -21,4 +21,17 @@ final class DesktopSpaceTests: XCTestCase {
         XCTAssertEqual(updatedSpace.desktopIndex, 3)
         XCTAssertTrue(updatedSpace.isCurrent)
     }
+
+    func testNumberTitleUsesOneBasedDesktopIndex() {
+        let space = DesktopSpace(
+            managedSpaceID: 42,
+            uuid: nil,
+            displayIdentifier: "Main",
+            displayIndex: 0,
+            desktopIndex: 3,
+            isCurrent: false
+        )
+
+        XCTAssertEqual(space.numberTitle, "4")
+    }
 }

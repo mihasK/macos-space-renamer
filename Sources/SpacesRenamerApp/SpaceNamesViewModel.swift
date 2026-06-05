@@ -9,6 +9,7 @@ final class SpaceNamesViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let reader: SpacesPreferencesReader
+    private let liveReader = LiveSpacesReader()
     private let store: SpaceNameStore
     private let onChange: () -> Void
     private let onClose: () -> Void
@@ -28,12 +29,18 @@ final class SpaceNamesViewModel: ObservableObject {
     }
 
     func reload() {
-        do {
-            spaces = try reader.readDesktopSpaces()
+        if let liveSpaces = liveReader.readDesktopSpaces() {
+            spaces = liveSpaces
             namesBySpaceID = store.allNames()
             errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
+        } else {
+            do {
+                spaces = try reader.readDesktopSpaces()
+                namesBySpaceID = store.allNames()
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
