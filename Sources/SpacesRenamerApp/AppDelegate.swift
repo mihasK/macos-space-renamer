@@ -14,20 +14,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var spaces: [DesktopSpace] = []
     private var editWindow: NSWindow?
+    private var switcherPanel: SpacesSwitcherPanel?
+    private var lastPanelCloseDate = Date.distantPast
     private var refreshTimer: Timer?
     private var activeSpaceRefreshTimers: [Timer] = []
     private var globalHotKey: GlobalHotKey?
     private var globalHotKeyStatus = "Shortcut: ⇧⌘G"
     private var currentManagedSpaceID: Int?
     private var completedInitialRefresh = false
-    private var isMenuOpen = false
-    private var renderedMenuSnapshot: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
         let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.title = "Spaces"
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(toggleSpacesPanel)
         self.statusItem = statusItem
 
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -81,11 +83,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func manualRefresh() {
         refresh(announceChanges: false)
+        renderSpacesPanelIfOpen()
     }
 
     private func registerGlobalHotKey() {
         let hotKey = GlobalHotKey { [weak self] in
-            self?.openSpacesMenuFromShortcut()
+            self?.toggleSpacesPanel()
         }
 
         do {
@@ -96,17 +99,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             globalHotKey = nil
             globalHotKeyStatus = "Shortcut unavailable"
         }
-    }
-
-    private func openSpacesMenuFromShortcut() {
-        if isMenuOpen {
-            statusItem?.menu?.cancelTracking()
-            return
-        }
-
-        refresh(announceChanges: false)
-        rebuildMenuIfNeeded(force: true)
-        statusItem?.button?.performClick(nil)
     }
 
     private func refresh(announceChanges: Bool) {
@@ -127,7 +119,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         currentManagedSpaceID = spaces.first(where: \.isCurrent)?.managedSpaceID ?? matchingActiveManagedSpaceID
         statusItem?.button?.title = currentStatusTitle()
-        rebuildMenuIfNeeded()
 
         if
             completedInitialRefresh,
@@ -189,17 +180,148 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editWindow = nil
     }
 
-    @objc private func renameSpaceFromMenu(_ sender: NSMenuItem) {
-        openNameEditor()
-    }
-
     private func renameSpace(_ space: DesktopSpace, name: String) {
         store.setName(name, for: space.managedSpaceID)
         statusItem?.button?.title = currentStatusTitle()
     }
 
+    @objc private func toggleSpacesPanel() {
+        if switcherPanel?.isVisible == true {
+            closeSpacesPanel()
+        } else if Date().timeIntervalSince(lastPanelCloseDate) > 0.2 {
+            showSpacesPanel()
+        } else {
+            lastPanelCloseDate = .distantPast
+        }
+    }
+
+    private func showSpacesPanel() {
+        refresh(announceChanges: false)
+
+        let panel = switcherPanel ?? SpacesSwitcherPanel()
+        switcherPanel = panel
+        renderSpacesPanel(panel)
+        positionSpacesPanel(panel)
+
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        panel.orderFrontRegardless()
+    }
+
+    private func renderSpacesPanelIfOpen() {
+        guard let panel = switcherPanel, panel.isVisible else {
+            return
+        }
+
+        renderSpacesPanel(panel)
+        positionSpacesPanel(panel)
+    }
+
+    private func renderSpacesPanel(_ panel: SpacesSwitcherPanel) {
+        let view = SpacesSwitcherPanelView(
+            spaces: spaces,
+            store: store,
+            globalHotKeyStatus: globalHotKeyStatus,
+            onSwitch: { [weak self] space in
+                self?.switchToSpace(space)
+            },
+            onRename: { [weak self] space, name in
+                self?.renameSpace(space, name: name)
+            },
+            onManageNames: { [weak self] in
+                self?.closeSpacesPanel()
+                self?.openNameEditor()
+            },
+            onRefresh: { [weak self] in
+                self?.manualRefresh()
+            },
+            onQuit: { [weak self] in
+                self?.quit()
+            }
+        )
+
+        panel.contentView = view
+        panel.initialFirstResponder = view
+        panel.setContentSize(view.frame.size)
+        panel.makeFirstResponder(view)
+        panel.onNumberKey = { [weak self] number in
+            self?.switchToSpaceNumber(number)
+        }
+        panel.onClose = { [weak self, weak panel] in
+            guard let self, let panel, self.switcherPanel === panel else {
+                return
+            }
+
+            self.lastPanelCloseDate = Date()
+            self.switcherPanel = nil
+        }
+    }
+
+    private func closeSpacesPanel() {
+        guard let panel = switcherPanel else {
+            return
+        }
+
+        panel.onClose = nil
+        panel.closePanel()
+        lastPanelCloseDate = Date()
+        switcherPanel = nil
+    }
+
+    private func positionSpacesPanel(_ panel: SpacesSwitcherPanel) {
+        let panelSize = panel.frame.size
+        let screen = statusItem?.button?.window?.screen ?? NSScreen.main
+        let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+
+        guard
+            let button = statusItem?.button,
+            let buttonWindow = button.window
+        else {
+            let fallbackOrigin = NSPoint(
+                x: visibleFrame.midX - panelSize.width / 2,
+                y: visibleFrame.maxY - panelSize.height - 34
+            )
+            panel.setFrameOrigin(fallbackOrigin)
+            return
+        }
+
+        let buttonFrameInWindow = button.convert(button.bounds, to: nil)
+        let buttonFrame = buttonWindow.convertToScreen(buttonFrameInWindow)
+        let margin: CGFloat = 8
+        var originX = buttonFrame.midX - panelSize.width / 2
+        var originY = buttonFrame.minY - panelSize.height - 6
+
+        originX = min(
+            max(originX, visibleFrame.minX + margin),
+            visibleFrame.maxX - panelSize.width - margin
+        )
+
+        if originY < visibleFrame.minY + margin {
+            originY = buttonFrame.maxY + 6
+        }
+
+        originY = min(
+            max(originY, visibleFrame.minY + margin),
+            visibleFrame.maxY - panelSize.height - margin
+        )
+
+        panel.setFrame(
+            NSRect(origin: NSPoint(x: originX, y: originY), size: panelSize),
+            display: true
+        )
+    }
+
+    private func switchToSpaceNumber(_ number: Int) {
+        guard let space = spaces.first(where: { $0.desktopIndex == number - 1 }) else {
+            NSSound.beep()
+            return
+        }
+
+        switchToSpace(space)
+    }
+
     private func switchToSpace(_ space: DesktopSpace) {
-        statusItem?.menu?.cancelTracking()
+        closeSpacesPanel()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
             guard let self else {
@@ -234,120 +356,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
-    private func rebuildMenuIfNeeded(force: Bool = false) {
-        guard !isMenuOpen else {
-            return
-        }
-
-        let snapshot = menuSnapshot()
-
-        guard force || snapshot != renderedMenuSnapshot else {
-            return
-        }
-
-        rebuildMenu()
-        renderedMenuSnapshot = snapshot
-    }
-
-    private func rebuildMenu() {
-        let menu = NSMenu()
-        menu.delegate = self
-
-        if spaces.isEmpty {
-            let item = NSMenuItem(title: "No desktops found", action: nil, keyEquivalent: "")
-            item.isEnabled = false
-            menu.addItem(item)
-        } else {
-            let spaceGroups = groupedSpaces()
-
-            for group in spaceGroups {
-                if spaceGroups.count > 1 {
-                    let displayItem = NSMenuItem(
-                        title: displayTitle(for: group.displayIdentifier, index: group.displayIndex),
-                        action: nil,
-                        keyEquivalent: ""
-                    )
-                    displayItem.isEnabled = false
-                    menu.addItem(displayItem)
-                }
-
-                for space in group.spaces {
-                    let item = NSMenuItem(
-                        title: menuTitle(for: space),
-                        action: #selector(switchToSpaceFromMenuItem),
-                        keyEquivalent: space.desktopIndex < 9 ? space.numberTitle : ""
-                    )
-                    item.representedObject = space.managedSpaceID
-                    item.target = self
-                    item.state = space.isCurrent ? .on : .off
-
-                    if space.desktopIndex < 9 {
-                        item.keyEquivalentModifierMask = []
-                    }
-
-                    menu.addItem(item)
-                }
-            }
-        }
-
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Manage Names...", action: #selector(openNameEditor), keyEquivalent: ","))
-        menu.items.last?.target = self
-        menu.addItem(NSMenuItem(title: "Refresh", action: #selector(manualRefresh), keyEquivalent: "r"))
-        menu.items.last?.target = self
-        let shortcutItem = NSMenuItem(title: globalHotKeyStatus, action: nil, keyEquivalent: "")
-        shortcutItem.isEnabled = false
-        menu.addItem(shortcutItem)
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Spaces Renamer", action: #selector(quit), keyEquivalent: "q"))
-        menu.items.last?.target = self
-
-        statusItem?.menu = menu
-    }
-
-    @objc private func switchToSpaceFromMenuItem(_ sender: NSMenuItem) {
-        guard
-            let managedSpaceID = sender.representedObject as? Int,
-            let space = spaces.first(where: { $0.managedSpaceID == managedSpaceID })
-        else {
-            NSSound.beep()
-            return
-        }
-
-        switchToSpace(space)
-    }
-
-    private func menuSnapshot() -> String {
-        spaces
-            .sorted { lhs, rhs in
-                if lhs.displayIndex == rhs.displayIndex {
-                    return lhs.desktopIndex < rhs.desktopIndex
-                }
-
-                return lhs.displayIndex < rhs.displayIndex
-            }
-            .map { space in
-                [
-                    space.displayIdentifier,
-                    "\(space.managedSpaceID)",
-                    "\(space.desktopIndex)",
-                    space.isCurrent ? "current" : "",
-                    store.name(for: space.managedSpaceID) ?? ""
-                ].joined(separator: ":")
-            }
-            .joined(separator: "|")
-    }
-
-    private func groupedSpaces() -> [(displayIdentifier: String, displayIndex: Int, spaces: [DesktopSpace])] {
-        let grouped = Dictionary(grouping: spaces, by: { $0.displayIndex })
-
-        return grouped.keys.sorted().map { displayIndex in
-            let displaySpaces = grouped[displayIndex, default: []].sorted { $0.desktopIndex < $1.desktopIndex }
-            let displayIdentifier = displaySpaces.first?.displayIdentifier ?? "Display \(displayIndex + 1)"
-            return (displayIdentifier, displayIndex, displaySpaces)
-        }
-    }
-
     private func currentStatusTitle() -> String {
         guard let currentSpace = spaces.first(where: \.isCurrent) else {
             return "Spaces"
@@ -371,16 +379,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func title(for space: DesktopSpace) -> String {
         store.name(for: space.managedSpaceID) ?? space.numberTitle
     }
-
-    private func menuTitle(for space: DesktopSpace) -> String {
-        let name = store.name(for: space.managedSpaceID) ?? space.defaultTitle
-        let suffix = space.desktopIndex >= 9 ? " (sequential)" : ""
-        return "\(space.numberTitle). \(name)\(suffix)"
-    }
-
-    private func displayTitle(for identifier: String, index: Int) -> String {
-        identifier == "Main" ? "Main Display" : "Display \(index + 1)"
-    }
 }
 
 extension AppDelegate: NSWindowDelegate {
@@ -388,17 +386,5 @@ extension AppDelegate: NSWindowDelegate {
         if notification.object as? NSWindow === editWindow {
             editWindow = nil
         }
-    }
-}
-
-extension AppDelegate: NSMenuDelegate {
-    func menuWillOpen(_ menu: NSMenu) {
-        isMenuOpen = true
-    }
-
-    func menuDidClose(_ menu: NSMenu) {
-        isMenuOpen = false
-        renderedMenuSnapshot = nil
-        refresh(announceChanges: false)
     }
 }

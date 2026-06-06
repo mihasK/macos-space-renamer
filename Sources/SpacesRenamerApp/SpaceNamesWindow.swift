@@ -48,7 +48,7 @@ struct SpaceNamesWindow: View {
             Text("Spaces")
                 .font(.title2.weight(.semibold))
 
-            Text("Rename spaces locally. Use the menu number to switch.")
+            Text("Rename spaces locally. Use the panel number to switch.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

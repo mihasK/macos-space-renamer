@@ -10,8 +10,8 @@ This first version does not modify Mission Control labels. It reads the local Sp
 swift run SpacesRenamer
 ```
 
-The app runs as a menu bar item. Open the menu and choose **Manage Names...** to edit names.
-Press `Shift` + `Command` + `G` to open the Spaces menu from anywhere.
+The app runs as a menu bar item. Click it to open the Spaces panel and edit names inline.
+Press `Shift` + `Command` + `G` to open the Spaces panel from anywhere.
 
 ## Build
 
@@ -46,10 +46,10 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 ## Current Scope
 
-- Lists detected desktop Spaces in the menu bar.
+- Lists detected desktop Spaces in a menu bar panel.
 - Shows the current desktop's local name in the menu bar.
-- Shows named Spaces in the menu for quick switching; choose **Manage Names...** to edit names.
-- Opens the Spaces menu with a global `Shift` + `Command` + `G` shortcut.
+- Shows named Spaces in the panel for quick switching and inline editing.
+- Opens the Spaces panel with a global `Shift` + `Command` + `G` shortcut.
 - Shows a small on-screen HUD when the current desktop changes.
 - Stores names locally by macOS managed Space ID.
 - Refreshes on Space changes and with a lightweight active-Space polling loop.
@@ -58,7 +58,7 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 Clicking Spaces 1-9 sends the matching Mission Control shortcut, such as `Control` + `7`. Spaces 10 and higher step from the current Space with repeated `Control` + `Left` / `Control` + `Right`, so they are slower and depend on current-Space detection. macOS may ask you to allow Spaces Renamer in **System Settings > Privacy & Security > Accessibility** before it can control Spaces with these shortcuts.
 
-When the Spaces menu is open, press `1` through `9` to switch directly to that Space without using the mouse.
+When the Spaces panel is open and no name field is being edited, press `1` through `9` to switch directly to that Space without using the mouse. Spaces 10 and higher remain clickable in the panel and are marked with a warning because they use sequential switching.
 
 ## Known Limitations
 
