@@ -201,13 +201,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func switchToSpace(_ space: DesktopSpace) {
         statusItem?.menu?.cancelTracking()
 
-        if switcher.switchToSpace(space) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-                self?.refresh(announceChanges: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+            guard let self else {
+                return
             }
-        } else {
-            NSSound.beep()
+
+            let currentSpace = self.currentSpace(for: space)
+
+            switch self.switcher.switchToSpace(space, from: currentSpace) {
+            case .alreadyCurrent:
+                break
+            case .started:
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                    self?.refresh(announceChanges: true)
+                }
+            case .needsAccessibilityPermission, .unavailable:
+                NSSound.beep()
+            }
         }
+    }
+
+    private func currentSpace(for targetSpace: DesktopSpace) -> DesktopSpace? {
+        spaces.first { $0.isCurrent && $0.displayIndex == targetSpace.displayIndex }
+            ?? spaces.first {
+                $0.managedSpaceID == currentManagedSpaceID && $0.displayIndex == targetSpace.displayIndex
+            }
+            ?? spaces.first { $0.isCurrent }
+            ?? spaces.first { $0.managedSpaceID == currentManagedSpaceID }
     }
 
     @objc private func quit() {

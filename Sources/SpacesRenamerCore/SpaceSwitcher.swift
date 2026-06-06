@@ -1,45 +1,86 @@
 import CoreGraphics
-import Darwin
+import ApplicationServices
 import Foundation
 
+public enum SpaceSwitchResult: Equatable {
+    case alreadyCurrent
+    case started
+    case needsAccessibilityPermission
+    case unavailable
+}
+
 public final class SpaceSwitcher {
-    fileprivate typealias MainConnectionFunction = @convention(c) () -> UInt32
-    fileprivate typealias SetCurrentSpaceFunction = @convention(c) (UInt32, CFString, UInt64) -> Void
-
-    private let mainConnection: MainConnectionFunction?
-    private let setCurrentSpace: SetCurrentSpaceFunction?
-
-    public init() {
-        let symbols = SpaceSwitcherSymbols.shared
-        mainConnection = symbols.mainConnection
-        setCurrentSpace = symbols.setCurrentSpace
-    }
+    public init() {}
 
     @discardableResult
-    public func switchToSpace(_ space: DesktopSpace) -> Bool {
-        if let mainConnection, let setCurrentSpace {
-            setCurrentSpace(mainConnection(), space.displayIdentifier as CFString, UInt64(space.managedSpaceID))
-            return true
+    public func switchToSpace(_ targetSpace: DesktopSpace, from currentSpace: DesktopSpace?) -> SpaceSwitchResult {
+        if currentSpace?.managedSpaceID == targetSpace.managedSpaceID {
+            return .alreadyCurrent
         }
 
-        return switchUsingKeyboardShortcut(desktopNumber: space.desktopIndex + 1)
+        guard isAccessibilityTrusted(prompt: true) else {
+            return .needsAccessibilityPermission
+        }
+
+        if targetSpace.desktopIndex < 9 {
+            switchUsingDesktopNumberShortcut(desktopNumber: targetSpace.desktopIndex + 1)
+            return .started
+        }
+
+        if
+            let currentSpace,
+            currentSpace.displayIndex == targetSpace.displayIndex,
+            currentSpace.desktopIndex != targetSpace.desktopIndex
+        {
+            switchUsingRelativeKeyboardShortcuts(
+                delta: targetSpace.desktopIndex - currentSpace.desktopIndex
+            )
+            return .started
+        }
+
+        return .unavailable
     }
 
-    private func switchUsingKeyboardShortcut(desktopNumber: Int) -> Bool {
-        guard let keyCode = keyCode(forDesktopNumber: desktopNumber) else {
-            return false
-        }
+    private func isAccessibilityTrusted(prompt: Bool) -> Bool {
+        let options = [
+            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: prompt
+        ] as CFDictionary
 
+        return AXIsProcessTrustedWithOptions(options)
+    }
+
+    private func switchUsingRelativeKeyboardShortcuts(delta: Int) {
+        let keyCode: CGKeyCode = delta > 0 ? 124 : 123
+        let steps = abs(delta)
+        let flags: CGEventFlags = [.maskControl, .maskSecondaryFn]
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            for step in 0..<steps {
+                self.postKey(keyCode, flags: flags)
+
+                if step < steps - 1 {
+                    Thread.sleep(forTimeInterval: 0.28)
+                }
+            }
+        }
+    }
+
+    private func switchUsingDesktopNumberShortcut(desktopNumber: Int) {
+        guard let keyCode = keyCode(forDesktopNumber: desktopNumber) else {
+            return
+        }
+        postKey(keyCode, flags: .maskControl)
+    }
+
+    private func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags) {
         let source = CGEventSource(stateID: .hidSystemState)
         let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
         let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
 
-        keyDown?.flags = .maskControl
-        keyUp?.flags = .maskControl
+        keyDown?.flags = flags
+        keyUp?.flags = flags
         keyDown?.post(tap: .cghidEventTap)
         keyUp?.post(tap: .cghidEventTap)
-
-        return keyDown != nil && keyUp != nil
     }
 
     private func keyCode(forDesktopNumber desktopNumber: Int) -> CGKeyCode? {
@@ -53,60 +94,7 @@ public final class SpaceSwitcher {
         case 7: 26
         case 8: 28
         case 9: 25
-        case 10: 29
         default: nil
         }
-    }
-}
-
-private final class SpaceSwitcherSymbols {
-    static let shared = SpaceSwitcherSymbols()
-
-    let mainConnection: SpaceSwitcher.MainConnectionFunction?
-    let setCurrentSpace: SpaceSwitcher.SetCurrentSpaceFunction?
-
-    private init() {
-        let handle = Self.openCoreGraphics()
-
-        mainConnection = Self.loadSymbol(
-            "CGSMainConnectionID",
-            from: handle,
-            as: SpaceSwitcher.MainConnectionFunction.self
-        )
-        setCurrentSpace = Self.loadSymbol(
-            "CGSManagedDisplaySetCurrentSpace",
-            from: handle,
-            as: SpaceSwitcher.SetCurrentSpaceFunction.self
-        )
-    }
-
-    private static func openCoreGraphics() -> UnsafeMutableRawPointer? {
-        let paths = [
-            "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics",
-            "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics"
-        ]
-
-        for path in paths {
-            if let handle = dlopen(path, RTLD_LAZY | RTLD_LOCAL) {
-                return handle
-            }
-        }
-
-        return nil
-    }
-
-    private static func loadSymbol<T>(
-        _ name: String,
-        from handle: UnsafeMutableRawPointer?,
-        as type: T.Type
-    ) -> T? {
-        let processHandle = UnsafeMutableRawPointer(bitPattern: -2)
-        let symbol = handle.flatMap { dlsym($0, name) } ?? dlsym(processHandle, name)
-
-        guard let symbol else {
-            return nil
-        }
-
-        return unsafeBitCast(symbol, to: type)
     }
 }

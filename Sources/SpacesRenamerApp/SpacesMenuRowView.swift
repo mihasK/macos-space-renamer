@@ -10,6 +10,7 @@ final class SpacesMenuRowView: NSView {
     private let containerView = NSView()
     private let numberButton = NSButton()
     private let nameField = NSTextField()
+    private let warningIcon = NSImageView()
     private let currentDot = NSView()
 
     init(
@@ -53,10 +54,10 @@ final class SpacesMenuRowView: NSView {
         numberButton.wantsLayer = true
         numberButton.layer?.cornerRadius = 12
         numberButton.layer?.backgroundColor = numberBackgroundColor
-        numberButton.contentTintColor = space.isCurrent ? .white : .labelColor
+        numberButton.contentTintColor = numberTintColor
         numberButton.target = self
         numberButton.action = #selector(switchButtonClicked)
-        numberButton.toolTip = "Switch to Space \(space.numberTitle)"
+        numberButton.toolTip = switchToolTip
         containerView.addSubview(numberButton)
 
         nameField.translatesAutoresizingMaskIntoConstraints = false
@@ -81,6 +82,17 @@ final class SpacesMenuRowView: NSView {
         nameField.toolTip = "Click to rename"
         containerView.addSubview(nameField)
 
+        warningIcon.translatesAutoresizingMaskIntoConstraints = false
+        warningIcon.image = NSImage(
+            systemSymbolName: "exclamationmark.triangle.fill",
+            accessibilityDescription: "Sequential switching"
+        )
+        warningIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+        warningIcon.contentTintColor = .systemOrange
+        warningIcon.isHidden = !usesSequentialSwitching
+        warningIcon.toolTip = sequentialSwitchingTooltip
+        containerView.addSubview(warningIcon)
+
         currentDot.translatesAutoresizingMaskIntoConstraints = false
         currentDot.wantsLayer = true
         currentDot.layer?.cornerRadius = 3
@@ -100,8 +112,13 @@ final class SpacesMenuRowView: NSView {
             numberButton.heightAnchor.constraint(equalToConstant: 24),
 
             nameField.leadingAnchor.constraint(equalTo: numberButton.trailingAnchor, constant: 10),
-            nameField.trailingAnchor.constraint(equalTo: currentDot.leadingAnchor, constant: -10),
+            nameField.trailingAnchor.constraint(equalTo: warningIcon.leadingAnchor, constant: -8),
             nameField.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+
+            warningIcon.trailingAnchor.constraint(equalTo: currentDot.leadingAnchor, constant: -8),
+            warningIcon.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            warningIcon.widthAnchor.constraint(equalToConstant: 14),
+            warningIcon.heightAnchor.constraint(equalToConstant: 14),
 
             currentDot.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
             currentDot.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
@@ -115,6 +132,10 @@ final class SpacesMenuRowView: NSView {
             return NSColor.controlAccentColor.withAlphaComponent(0.14).cgColor
         }
 
+        if usesSequentialSwitching {
+            return NSColor.systemOrange.withAlphaComponent(0.08).cgColor
+        }
+
         return NSColor.clear.cgColor
     }
 
@@ -123,7 +144,39 @@ final class SpacesMenuRowView: NSView {
             return NSColor.controlAccentColor.cgColor
         }
 
+        if usesSequentialSwitching {
+            return NSColor.systemOrange.withAlphaComponent(0.20).cgColor
+        }
+
         return NSColor.quaternaryLabelColor.withAlphaComponent(0.32).cgColor
+    }
+
+    private var numberTintColor: NSColor {
+        if space.isCurrent {
+            return .white
+        }
+
+        if usesSequentialSwitching {
+            return .systemOrange
+        }
+
+        return .labelColor
+    }
+
+    private var switchToolTip: String {
+        if usesSequentialSwitching {
+            return sequentialSwitchingTooltip
+        }
+
+        return "Switch to Space \(space.numberTitle) with Control-\(space.numberTitle)"
+    }
+
+    private var sequentialSwitchingTooltip: String {
+        "Switch to Space \(space.numberTitle) by stepping from the current Space"
+    }
+
+    private var usesSequentialSwitching: Bool {
+        space.desktopIndex >= 9
     }
 
     @objc private func switchButtonClicked() {

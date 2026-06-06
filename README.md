@@ -54,6 +54,10 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 - Stores names locally by macOS managed Space ID.
 - Refreshes on Space changes and with a lightweight active-Space polling loop.
 
+## Switching
+
+Clicking Spaces 1-9 sends the matching Mission Control shortcut, such as `Control` + `7`. Spaces 10 and higher step from the current Space with repeated `Control` + `Left` / `Control` + `Right`, so they are slower and depend on current-Space detection. macOS may ask you to allow Spaces Renamer in **System Settings > Privacy & Security > Accessibility** before it can control Spaces with these shortcuts.
+
 ## Known Limitations
 
 - macOS does not expose a public API for true Mission Control Space renaming.
