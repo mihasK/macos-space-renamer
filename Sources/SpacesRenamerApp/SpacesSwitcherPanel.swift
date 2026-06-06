@@ -284,7 +284,7 @@ private final class SpaceSwitcherPanelRowView: NSView {
 
     private let numberButton = NSButton()
     private let nameField = NSTextField()
-    private let warningIcon = NSImageView()
+    private let sequentialIcon = NSImageView()
 
     init(
         space: DesktopSpace,
@@ -309,6 +309,7 @@ private final class SpaceSwitcherPanelRowView: NSView {
         wantsLayer = true
         layer?.cornerRadius = 7
         layer?.backgroundColor = backgroundColor
+        toolTip = sequentialSwitchingTooltip
 
         numberButton.translatesAutoresizingMaskIntoConstraints = false
         numberButton.title = space.numberTitle
@@ -321,6 +322,7 @@ private final class SpaceSwitcherPanelRowView: NSView {
         numberButton.contentTintColor = numberTintColor
         numberButton.target = self
         numberButton.action = #selector(switchButtonClicked)
+        numberButton.toolTip = sequentialSwitchingTooltip
         addSubview(numberButton)
 
         nameField.translatesAutoresizingMaskIntoConstraints = false
@@ -336,16 +338,16 @@ private final class SpaceSwitcherPanelRowView: NSView {
         nameField.action = #selector(nameFieldCommitted)
         addSubview(nameField)
 
-        warningIcon.translatesAutoresizingMaskIntoConstraints = false
-        warningIcon.image = NSImage(
-            systemSymbolName: "exclamationmark.triangle.fill",
+        sequentialIcon.translatesAutoresizingMaskIntoConstraints = false
+        sequentialIcon.image = NSImage(
+            systemSymbolName: "arrow.right.circle",
             accessibilityDescription: "Sequential switching"
         )
-        warningIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
-        warningIcon.contentTintColor = .systemOrange
-        warningIcon.isHidden = !usesSequentialSwitching
-        warningIcon.toolTip = "Uses sequential Control-Right/Left switching"
-        addSubview(warningIcon)
+        sequentialIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
+        sequentialIcon.contentTintColor = .tertiaryLabelColor
+        sequentialIcon.isHidden = !usesSequentialSwitching
+        sequentialIcon.toolTip = sequentialSwitchingTooltip
+        addSubview(sequentialIcon)
 
         NSLayoutConstraint.activate([
             numberButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
@@ -354,13 +356,13 @@ private final class SpaceSwitcherPanelRowView: NSView {
             numberButton.heightAnchor.constraint(equalToConstant: 22),
 
             nameField.leadingAnchor.constraint(equalTo: numberButton.trailingAnchor, constant: 9),
-            nameField.trailingAnchor.constraint(equalTo: warningIcon.leadingAnchor, constant: -8),
+            nameField.trailingAnchor.constraint(equalTo: sequentialIcon.leadingAnchor, constant: -8),
             nameField.centerYAnchor.constraint(equalTo: centerYAnchor),
 
-            warningIcon.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            warningIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            warningIcon.widthAnchor.constraint(equalToConstant: 13),
-            warningIcon.heightAnchor.constraint(equalToConstant: 13)
+            sequentialIcon.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            sequentialIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            sequentialIcon.widthAnchor.constraint(equalToConstant: 13),
+            sequentialIcon.heightAnchor.constraint(equalToConstant: 13)
         ])
     }
 
@@ -370,7 +372,7 @@ private final class SpaceSwitcherPanelRowView: NSView {
         }
 
         if usesSequentialSwitching {
-            return NSColor.systemOrange.withAlphaComponent(0.07).cgColor
+            return NSColor.quaternaryLabelColor.withAlphaComponent(0.14).cgColor
         }
 
         return NSColor.clear.cgColor
@@ -382,7 +384,7 @@ private final class SpaceSwitcherPanelRowView: NSView {
         }
 
         if usesSequentialSwitching {
-            return NSColor.systemOrange.withAlphaComponent(0.20).cgColor
+            return NSColor.tertiaryLabelColor.withAlphaComponent(0.18).cgColor
         }
 
         return NSColor.quaternaryLabelColor.withAlphaComponent(0.32).cgColor
@@ -394,7 +396,7 @@ private final class SpaceSwitcherPanelRowView: NSView {
         }
 
         if usesSequentialSwitching {
-            return .systemOrange
+            return .secondaryLabelColor
         }
 
         return .labelColor
@@ -402,6 +404,14 @@ private final class SpaceSwitcherPanelRowView: NSView {
 
     private var usesSequentialSwitching: Bool {
         space.desktopIndex >= 9
+    }
+
+    private var sequentialSwitchingTooltip: String? {
+        guard usesSequentialSwitching else {
+            return nil
+        }
+
+        return "Spaces above 9 do not have direct Control-number shortcuts, so switching uses repeated Control-Left/Right steps."
     }
 
     @objc private func switchButtonClicked() {

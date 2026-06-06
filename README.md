@@ -58,7 +58,7 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 Clicking Spaces 1-9 sends the matching Mission Control shortcut, such as `Control` + `7`. Spaces 10 and higher step from the current Space with repeated `Control` + `Left` / `Control` + `Right`, so they are slower and depend on current-Space detection. macOS may ask you to allow Spaces Renamer in **System Settings > Privacy & Security > Accessibility** before it can control Spaces with these shortcuts.
 
-When the Spaces panel is open and no name field is being edited, press `1` through `9` to switch directly to that Space without using the mouse. Spaces 10 and higher remain clickable in the panel and are marked with a warning because they use sequential switching.
+When the Spaces panel is open and no name field is being edited, press `1` through `9` to switch directly to that Space without using the mouse. Spaces 10 and higher remain clickable in the panel and use a subtle marker because they switch sequentially.
 
 The double-`Control` opener only triggers on clean taps; the third tap in the same sequence closes the panel. Holding `Control` with another key, such as `Control` + `1`, does not open the panel. If the panel says double `Control` needs Accessibility, re-enable the app in **System Settings > Privacy & Security > Accessibility** and leave it running for a couple of seconds so it can retry.
 
