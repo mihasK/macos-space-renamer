@@ -272,18 +272,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 for space in group.spaces {
-                    let item = NSMenuItem()
-                    item.view = SpacesMenuRowView(
-                        space: space,
-                        name: store.name(for: space.managedSpaceID) ?? "",
-                        onSwitch: { [weak self] space in
-                            self?.switchToSpace(space)
-                        },
-                        onRename: { [weak self] space, name in
-                            self?.renameSpace(space, name: name)
-                        }
+                    let item = NSMenuItem(
+                        title: menuTitle(for: space),
+                        action: #selector(switchToSpaceFromMenuItem),
+                        keyEquivalent: space.desktopIndex < 9 ? space.numberTitle : ""
                     )
                     item.representedObject = space.managedSpaceID
+                    item.target = self
+                    item.state = space.isCurrent ? .on : .off
+
+                    if space.desktopIndex < 9 {
+                        item.keyEquivalentModifierMask = []
+                    }
+
                     menu.addItem(item)
                 }
             }
@@ -302,6 +303,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.items.last?.target = self
 
         statusItem?.menu = menu
+    }
+
+    @objc private func switchToSpaceFromMenuItem(_ sender: NSMenuItem) {
+        guard
+            let managedSpaceID = sender.representedObject as? Int,
+            let space = spaces.first(where: { $0.managedSpaceID == managedSpaceID })
+        else {
+            NSSound.beep()
+            return
+        }
+
+        switchToSpace(space)
     }
 
     private func menuSnapshot() -> String {
@@ -357,6 +370,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func title(for space: DesktopSpace) -> String {
         store.name(for: space.managedSpaceID) ?? space.numberTitle
+    }
+
+    private func menuTitle(for space: DesktopSpace) -> String {
+        let name = store.name(for: space.managedSpaceID) ?? space.defaultTitle
+        let suffix = space.desktopIndex >= 9 ? " (sequential)" : ""
+        return "\(space.numberTitle). \(name)\(suffix)"
     }
 
     private func displayTitle(for identifier: String, index: Int) -> String {

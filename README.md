@@ -48,7 +48,7 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 - Lists detected desktop Spaces in the menu bar.
 - Shows the current desktop's local name in the menu bar.
-- Allows inline renaming from the menu; click a Space number to switch, click its name to edit.
+- Shows named Spaces in the menu for quick switching; choose **Manage Names...** to edit names.
 - Opens the Spaces menu with a global `Shift` + `Command` + `G` shortcut.
 - Shows a small on-screen HUD when the current desktop changes.
 - Stores names locally by macOS managed Space ID.
@@ -58,9 +58,11 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 Clicking Spaces 1-9 sends the matching Mission Control shortcut, such as `Control` + `7`. Spaces 10 and higher step from the current Space with repeated `Control` + `Left` / `Control` + `Right`, so they are slower and depend on current-Space detection. macOS may ask you to allow Spaces Renamer in **System Settings > Privacy & Security > Accessibility** before it can control Spaces with these shortcuts.
 
+When the Spaces menu is open, press `1` through `9` to switch directly to that Space without using the mouse.
+
 ## Known Limitations
 
 - macOS does not expose a public API for true Mission Control Space renaming.
 - The desktop list comes from `~/Library/Preferences/com.apple.spaces.plist`, which is not a stable public contract.
 - Current desktop detection uses dynamically loaded private CoreGraphics symbols when available, then falls back to the plist state.
-- Space switching is intentionally not implemented yet.
+- Spaces 10 and higher require sequential switching because macOS only exposes direct shortcuts for earlier desktops.
