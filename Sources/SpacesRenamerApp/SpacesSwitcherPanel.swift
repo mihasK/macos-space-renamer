@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SpacesRenamerCore
 
 @MainActor
@@ -88,7 +89,12 @@ final class SpacesSwitcherPanelView: NSView {
         static let headerHeight: CGFloat = 44
         static let footerHeight: CGFloat = 52
         static let outerPadding: CGFloat = 10
+        static let panelCornerRadius: CGFloat = 10
     }
+
+    private let backgroundLayer = CAGradientLayer()
+    private let borderLayer = CAShapeLayer()
+    private let highlightLayer = CAShapeLayer()
 
     init(
         spaces: [DesktopSpace],
@@ -137,10 +143,8 @@ final class SpacesSwitcherPanelView: NSView {
         onQuit: @escaping () -> Void
     ) {
         wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        layer?.borderWidth = 1
-        layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.55).cgColor
+        layer?.masksToBounds = false
+        setupChromeLayers()
 
         let stack = NSStackView()
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -167,6 +171,7 @@ final class SpacesSwitcherPanelView: NSView {
                 let row = SpaceSwitcherPanelRowView(
                     space: space,
                     name: store.name(for: space.managedSpaceID) ?? "",
+                    accentColor: SpacesVisualTheme.accentColor(for: space, in: spaces),
                     onSwitch: onSwitch,
                     onRename: onRename
                 )
@@ -190,6 +195,66 @@ final class SpacesSwitcherPanelView: NSView {
             stack.topAnchor.constraint(equalTo: topAnchor, constant: Layout.outerPadding),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Layout.outerPadding)
         ])
+    }
+
+    override func layout() {
+        super.layout()
+        updateChromeLayers()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateChromeLayers()
+    }
+
+    private func setupChromeLayers() {
+        backgroundLayer.startPoint = CGPoint(x: 0.12, y: 1)
+        backgroundLayer.endPoint = CGPoint(x: 0.88, y: 0)
+        backgroundLayer.cornerRadius = Layout.panelCornerRadius
+        backgroundLayer.masksToBounds = true
+        layer?.insertSublayer(backgroundLayer, at: 0)
+
+        borderLayer.fillColor = nil
+        borderLayer.lineWidth = 1.2
+        layer?.addSublayer(borderLayer)
+
+        highlightLayer.fillColor = nil
+        highlightLayer.lineWidth = 0.8
+        layer?.addSublayer(highlightLayer)
+
+        updateChromeLayers()
+    }
+
+    private func updateChromeLayers() {
+        guard bounds.width > 0, bounds.height > 0 else {
+            return
+        }
+
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        backgroundLayer.frame = bounds
+        backgroundLayer.cornerRadius = Layout.panelCornerRadius
+        backgroundLayer.colors = SpacesVisualTheme.panelGradientColors(appearance: effectiveAppearance)
+        backgroundLayer.locations = [0.0, 0.38, 0.76, 1.0]
+
+        let borderPath = CGPath(
+            roundedRect: bounds.insetBy(dx: 0.6, dy: 0.6),
+            cornerWidth: Layout.panelCornerRadius,
+            cornerHeight: Layout.panelCornerRadius,
+            transform: nil
+        )
+        borderLayer.frame = bounds
+        borderLayer.path = borderPath
+        borderLayer.strokeColor = SpacesVisualTheme.panelBorderColor(appearance: effectiveAppearance).cgColor
+
+        let highlightPath = CGPath(
+            roundedRect: bounds.insetBy(dx: 1.5, dy: 1.5),
+            cornerWidth: Layout.panelCornerRadius - 1,
+            cornerHeight: Layout.panelCornerRadius - 1,
+            transform: nil
+        )
+        highlightLayer.frame = bounds
+        highlightLayer.path = highlightPath
+        highlightLayer.strokeColor = NSColor.white.withAlphaComponent(isDark ? 0.10 : 0.42).cgColor
     }
 
     private func makeHeader(globalHotKeyStatus: String) -> NSView {
@@ -279,6 +344,7 @@ final class SpacesSwitcherPanelView: NSView {
 @MainActor
 private final class SpaceSwitcherPanelRowView: NSView {
     private let space: DesktopSpace
+    private let accentColor: NSColor
     private let onSwitch: (DesktopSpace) -> Void
     private let onRename: (DesktopSpace, String) -> Void
 
@@ -289,10 +355,12 @@ private final class SpaceSwitcherPanelRowView: NSView {
     init(
         space: DesktopSpace,
         name: String,
+        accentColor: NSColor,
         onSwitch: @escaping (DesktopSpace) -> Void,
         onRename: @escaping (DesktopSpace, String) -> Void
     ) {
         self.space = space
+        self.accentColor = accentColor
         self.onSwitch = onSwitch
         self.onRename = onRename
 
@@ -309,6 +377,8 @@ private final class SpaceSwitcherPanelRowView: NSView {
         wantsLayer = true
         layer?.cornerRadius = 7
         layer?.backgroundColor = backgroundColor
+        layer?.borderColor = rowBorderColor
+        layer?.borderWidth = rowBorderWidth
         toolTip = sequentialSwitchingTooltip
 
         numberButton.translatesAutoresizingMaskIntoConstraints = false
@@ -368,11 +438,11 @@ private final class SpaceSwitcherPanelRowView: NSView {
 
     private var backgroundColor: CGColor {
         if space.isCurrent {
-            return NSColor.controlAccentColor.withAlphaComponent(0.14).cgColor
+            return accentColor.withAlphaComponent(0.18).cgColor
         }
 
         if usesSequentialSwitching {
-            return NSColor.quaternaryLabelColor.withAlphaComponent(0.14).cgColor
+            return accentColor.withAlphaComponent(0.07).cgColor
         }
 
         return NSColor.clear.cgColor
@@ -380,14 +450,14 @@ private final class SpaceSwitcherPanelRowView: NSView {
 
     private var numberBackgroundColor: CGColor {
         if space.isCurrent {
-            return NSColor.controlAccentColor.cgColor
+            return accentColor.cgColor
         }
 
         if usesSequentialSwitching {
-            return NSColor.tertiaryLabelColor.withAlphaComponent(0.18).cgColor
+            return accentColor.withAlphaComponent(0.22).cgColor
         }
 
-        return NSColor.quaternaryLabelColor.withAlphaComponent(0.32).cgColor
+        return accentColor.withAlphaComponent(0.16).cgColor
     }
 
     private var numberTintColor: NSColor {
@@ -396,10 +466,22 @@ private final class SpaceSwitcherPanelRowView: NSView {
         }
 
         if usesSequentialSwitching {
-            return .secondaryLabelColor
+            return accentColor.blended(withFraction: 0.34, of: .labelColor) ?? .secondaryLabelColor
         }
 
-        return .labelColor
+        return accentColor.blended(withFraction: 0.20, of: .labelColor) ?? .labelColor
+    }
+
+    private var rowBorderColor: CGColor? {
+        guard space.isCurrent else {
+            return nil
+        }
+
+        return accentColor.withAlphaComponent(0.55).cgColor
+    }
+
+    private var rowBorderWidth: CGFloat {
+        space.isCurrent ? 1 : 0
     }
 
     private var usesSequentialSwitching: Bool {

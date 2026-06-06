@@ -28,10 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "Spaces"
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(toggleSpacesPanel)
         self.statusItem = statusItem
+        configureStatusItemButton()
 
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
@@ -150,7 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         currentManagedSpaceID = spaces.first(where: \.isCurrent)?.managedSpaceID ?? matchingActiveManagedSpaceID
-        statusItem?.button?.title = currentStatusTitle()
+        updateStatusItemAppearance()
 
         if
             completedInitialRefresh,
@@ -214,7 +212,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func renameSpace(_ space: DesktopSpace, name: String) {
         store.setName(name, for: space.managedSpaceID)
-        statusItem?.button?.title = currentStatusTitle()
+        updateStatusItemAppearance()
     }
 
     @objc private func toggleSpacesPanel() {
@@ -389,11 +387,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func currentStatusTitle() -> String {
-        guard let currentSpace = spaces.first(where: \.isCurrent) else {
+        guard let currentSpace = currentStatusSpace() else {
             return "Spaces"
         }
 
         return title(for: currentSpace)
+    }
+
+    private func currentStatusSpace() -> DesktopSpace? {
+        spaces.first(where: \.isCurrent)
+            ?? spaces.first { $0.managedSpaceID == currentManagedSpaceID }
     }
 
     private func announceCurrentSpaceChange() {
@@ -410,6 +413,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func title(for space: DesktopSpace) -> String {
         store.name(for: space.managedSpaceID) ?? space.numberTitle
+    }
+
+    private func configureStatusItemButton() {
+        guard let button = statusItem?.button else {
+            return
+        }
+
+        button.title = ""
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
+        button.isBordered = false
+        button.target = self
+        button.action = #selector(toggleSpacesPanel)
+        updateStatusItemAppearance()
+    }
+
+    private func updateStatusItemAppearance() {
+        guard
+            let statusItem,
+            let button = statusItem.button
+        else {
+            return
+        }
+
+        let currentSpace = currentStatusSpace()
+        let displayTitle = currentSpace.map { title(for: $0) } ?? "Spaces"
+        let assignedTitle = currentSpace.flatMap { store.name(for: $0.managedSpaceID) }
+        let accentColor = currentSpace.map {
+            SpacesVisualTheme.accentColor(for: $0, in: spaces)
+        } ?? SpacesVisualTheme.defaultAccentColor
+        let image = StatusPillRenderer.image(
+            numberTitle: currentSpace?.numberTitle,
+            title: assignedTitle,
+            accentColor: accentColor,
+            appearance: button.effectiveAppearance
+        )
+        image.isTemplate = false
+
+        button.title = ""
+        button.image = image
+        button.toolTip = "Current Space: \(displayTitle)"
+        button.setAccessibilityLabel("Current Space: \(displayTitle)")
+        statusItem.length = image.size.width + 8
     }
 }
 

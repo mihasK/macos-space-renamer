@@ -8,6 +8,8 @@
 	<string>SpacesRenamer</string>
 	<key>CFBundleIdentifier</key>
 	<string>dev.mihas.SpacesRenamer</string>
+	<key>CFBundleIconFile</key>
+	<string>SpacesRenamer</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
