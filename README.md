@@ -7,7 +7,64 @@ This first version does not modify Mission Control labels. It reads the local Sp
 ## Run
 
 ```sh
-swift run SpacesRenamer
+./scripts/app.sh start
+```
+
+The normal way to run the app is through the packaged bundle in `dist/SpacesRenamer.app`.
+That keeps macOS Accessibility permissions tied to the same app identity.
+
+Useful commands:
+
+```sh
+./scripts/app.sh start     # package if needed, then open if not running
+./scripts/app.sh restart   # package if needed, quit, then open again
+./scripts/app.sh stop      # quit the running app
+./scripts/app.sh status    # show whether it is running
+```
+
+The same commands are available through `make`:
+
+```sh
+make app-start
+make app-restart
+make app-stop
+make app-status
+```
+
+Use `--no-build` when you only want to reuse the existing app bundle:
+
+```sh
+./scripts/app.sh restart --no-build
+```
+
+## Start at Login
+
+For local development, install a user LaunchAgent that opens the packaged app at login:
+
+```sh
+./scripts/login-item.sh install
+```
+
+Check or remove it with:
+
+```sh
+./scripts/login-item.sh status
+./scripts/login-item.sh uninstall
+```
+
+The same commands are available through `make`:
+
+```sh
+make login-install
+make login-status
+make login-uninstall
+```
+
+By default, the login launcher opens `dist/SpacesRenamer.app` from this checkout.
+If you copy the app to `/Applications`, point the login launcher there instead:
+
+```sh
+SPACES_RENAMER_APP_DIR=/Applications/SpacesRenamer.app ./scripts/login-item.sh install --no-build
 ```
 
 The app runs as a menu bar item. Click it to open the Spaces panel and edit names inline.
@@ -31,6 +88,16 @@ Use a release build with:
 ```sh
 CONFIGURATION=release ./scripts/package-app.sh
 ```
+
+For personal use, keeping the app in `dist/` is fine as long as this checkout stays in the same location.
+For a more stable local install, copy `dist/SpacesRenamer.app` to `/Applications` or `~/Applications`,
+then install the login launcher with `SPACES_RENAMER_APP_DIR` pointing at that copied app.
+
+For public distribution, the usual macOS path is:
+release build, stable bundle identifier, proper version number and icon, Developer ID signing,
+Apple notarization, and a `.dmg` or zipped `.app`. Because this app works with Spaces behavior that macOS
+does not expose as a stable public API, public shipping would need extra care around compatibility and
+Accessibility permission UX.
 
 ## Test
 
