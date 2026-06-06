@@ -17,9 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var switcherPanel: SpacesSwitcherPanel?
     private var lastPanelCloseDate = Date.distantPast
     private var refreshTimer: Timer?
+    private var openerRetryTimer: Timer?
     private var activeSpaceRefreshTimers: [Timer] = []
     private var globalHotKey: GlobalHotKey?
-    private var globalHotKeyStatus = "Shortcut: ⇧⌘G"
+    private var globalHotKeyStatus = "Opener: double Control"
     private var currentManagedSpaceID: Int?
     private var completedInitialRefresh = false
 
@@ -53,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         refreshTimer?.invalidate()
+        openerRetryTimer?.invalidate()
         activeSpaceRefreshTimers.forEach { $0.invalidate() }
     }
 
@@ -91,14 +93,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.toggleSpacesPanel()
         }
 
-        do {
-            try hotKey.registerCommandShiftG()
-            globalHotKey = hotKey
-            globalHotKeyStatus = "Shortcut: ⇧⌘G"
-        } catch {
-            globalHotKey = nil
-            globalHotKeyStatus = "Shortcut unavailable"
+        globalHotKey = hotKey
+        updateGlobalHotKeyStatus(hotKey.registerOpeners(promptForAccessibility: true))
+
+        openerRetryTimer = Timer.scheduledTimer(
+            timeInterval: 2,
+            target: self,
+            selector: #selector(openerRetryTimerFired),
+            userInfo: nil,
+            repeats: true
+        )
+    }
+
+    @objc private func openerRetryTimerFired() {
+        guard let globalHotKey else {
+            openerRetryTimer?.invalidate()
+            openerRetryTimer = nil
+            updateGlobalHotKeyStatus(.unavailable)
+            return
         }
+
+        let status = globalHotKey.registerOpeners(promptForAccessibility: false)
+        updateGlobalHotKeyStatus(status)
+
+        if status == .doubleControl {
+            openerRetryTimer?.invalidate()
+            openerRetryTimer = nil
+        }
+    }
+
+    private func updateGlobalHotKeyStatus(_ status: GlobalHotKey.RegistrationStatus) {
+        let statusText = status.displayText
+
+        guard globalHotKeyStatus != statusText else {
+            return
+        }
+
+        globalHotKeyStatus = statusText
+        renderSpacesPanelIfOpen()
     }
 
     private func refresh(announceChanges: Bool) {
