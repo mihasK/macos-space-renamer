@@ -21,7 +21,8 @@ enum StatusPillRenderer {
         let resolvedNumber = numberTitle?.isEmpty == false ? numberTitle : nil
         let resolvedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let visibleTitle = resolvedTitle?.isEmpty == false ? resolvedTitle : nil
-        let textAttributes = titleAttributes(accentColor: accentColor, appearance: appearance)
+        let badgeColor = badgeAccentColor(from: accentColor, appearance: appearance)
+        let textAttributes = titleAttributes(appearance: appearance)
         let textWidth = visibleTitle.map {
             ceil(($0 as NSString).size(withAttributes: textAttributes).width)
         } ?? 0
@@ -34,8 +35,13 @@ enum StatusPillRenderer {
         let size = NSSize(width: width, height: Layout.height)
 
         return NSImage(size: size, flipped: false) { rect in
-            drawBackground(in: rect, accentColor: accentColor, appearance: appearance)
-            drawNumber(resolvedNumber ?? "?", in: rect, accentColor: accentColor)
+            drawBackground(in: rect, accentColor: badgeColor, appearance: appearance)
+            drawNumber(
+                resolvedNumber ?? "?",
+                in: rect,
+                accentColor: badgeColor,
+                appearance: appearance
+            )
 
             if let visibleTitle {
                 drawTitle(
@@ -90,7 +96,8 @@ enum StatusPillRenderer {
     private static func drawNumber(
         _ numberTitle: String,
         in rect: NSRect,
-        accentColor: NSColor
+        accentColor: NSColor,
+        appearance: NSAppearance?
     ) {
         let circleRect = NSRect(
             x: Layout.horizontalPadding,
@@ -106,7 +113,7 @@ enum StatusPillRenderer {
         paragraphStyle.alignment = .center
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: numberTitle.count > 1 ? 9.8 : 10.8, weight: .semibold),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.96),
+            .foregroundColor: numberForegroundColor(for: accentColor, appearance: appearance),
             .paragraphStyle: paragraphStyle
         ]
         let textRect = circleRect.insetBy(dx: 1, dy: 2.2)
@@ -129,7 +136,6 @@ enum StatusPillRenderer {
     }
 
     private static func titleAttributes(
-        accentColor: NSColor,
         appearance: NSAppearance?
     ) -> [NSAttributedString.Key: Any] {
         let paragraphStyle = NSMutableParagraphStyle()
@@ -138,12 +144,81 @@ enum StatusPillRenderer {
         let isDark = appearance?.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let textColor = isDark
             ? NSColor.white.withAlphaComponent(0.94)
-            : accentColor.blended(withFraction: 0.34, of: .labelColor) ?? .labelColor
+            : NSColor(calibratedWhite: 0.20, alpha: 0.88)
 
         return [
             .font: NSFont.systemFont(ofSize: 12, weight: .medium),
             .foregroundColor: textColor,
             .paragraphStyle: paragraphStyle
         ]
+    }
+
+    private static func badgeAccentColor(
+        from accentColor: NSColor,
+        appearance: NSAppearance?
+    ) -> NSColor {
+        let isDark = appearance?.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let color = accentColor.usingColorSpace(.deviceRGB) ?? accentColor
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+
+        saturation = max(saturation, isDark ? 0.54 : 0.68)
+
+        if isDark {
+            brightness = max(brightness, 0.66)
+        } else {
+            brightness = min(brightness, 0.82)
+
+            if isYellowOrGreen(hue) {
+                saturation = max(saturation, 0.76)
+                brightness = min(brightness, 0.78)
+            }
+        }
+
+        return NSColor(
+            calibratedHue: hue,
+            saturation: saturation,
+            brightness: brightness,
+            alpha: alpha
+        )
+    }
+
+    private static func numberForegroundColor(
+        for accentColor: NSColor,
+        appearance: NSAppearance?
+    ) -> NSColor {
+        let isDark = appearance?.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+
+        if isDark {
+            return NSColor.white.withAlphaComponent(0.96)
+        }
+
+        if relativeLuminance(of: accentColor) > 0.48 {
+            return NSColor(calibratedWhite: 0.16, alpha: 0.82)
+        }
+
+        return NSColor.white.withAlphaComponent(0.96)
+    }
+
+    private static func isYellowOrGreen(_ hue: CGFloat) -> Bool {
+        (0.10...0.32).contains(hue)
+    }
+
+    private static func relativeLuminance(of color: NSColor) -> CGFloat {
+        let color = color.usingColorSpace(.deviceRGB) ?? color
+
+        func channel(_ value: CGFloat) -> CGFloat {
+            value <= 0.03928
+                ? value / 12.92
+                : pow((value + 0.055) / 1.055, 2.4)
+        }
+
+        return 0.2126 * channel(color.redComponent)
+            + 0.7152 * channel(color.greenComponent)
+            + 0.0722 * channel(color.blueComponent)
     }
 }
