@@ -24,7 +24,7 @@ final class GlobalHotKey {
     }
 
     private let maximumTapDuration: TimeInterval = 0.35
-    private let maximumDoubleTapInterval: TimeInterval = 0.45
+    private let maximumControlTapInterval: TimeInterval = 0.45
     private let handler: @MainActor () -> Void
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
@@ -34,6 +34,7 @@ final class GlobalHotKey {
     private var controlIsDown = false
     private var currentTapInvalid = false
     private var lastControlTapDate: Date?
+    private var consecutiveControlTapCount = 0
 
     init(handler: @escaping @MainActor () -> Void) {
         self.handler = handler
@@ -188,12 +189,12 @@ final class GlobalHotKey {
             if cleanTap {
                 recordControlTap(at: now)
             } else {
-                lastControlTapDate = nil
+                resetControlTapSequence()
             }
         } else if controlDown, otherModifierDown {
             currentTapInvalid = true
         } else if otherModifierDown {
-            lastControlTapDate = nil
+            resetControlTapSequence()
         }
     }
 
@@ -201,22 +202,36 @@ final class GlobalHotKey {
         if controlIsDown {
             currentTapInvalid = true
         } else {
-            lastControlTapDate = nil
+            resetControlTapSequence()
         }
     }
 
     private func recordControlTap(at date: Date) {
         if
             let lastControlTapDate,
-            date.timeIntervalSince(lastControlTapDate) <= maximumDoubleTapInterval
+            date.timeIntervalSince(lastControlTapDate) <= maximumControlTapInterval
         {
-            self.lastControlTapDate = nil
+            consecutiveControlTapCount += 1
+        } else {
+            consecutiveControlTapCount = 1
+        }
+
+        lastControlTapDate = date
+
+        if consecutiveControlTapCount == 2 || consecutiveControlTapCount == 3 {
             Task { @MainActor in
                 handler()
             }
-        } else {
-            lastControlTapDate = date
         }
+
+        if consecutiveControlTapCount >= 3 {
+            resetControlTapSequence()
+        }
+    }
+
+    private func resetControlTapSequence() {
+        lastControlTapDate = nil
+        consecutiveControlTapCount = 0
     }
 
     private func isAccessibilityTrusted(prompt: Bool) -> Bool {
