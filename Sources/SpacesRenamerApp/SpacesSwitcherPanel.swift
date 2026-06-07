@@ -28,6 +28,10 @@ final class SpacesSwitcherPanel: NSPanel {
     override var canBecomeMain: Bool { true }
 
     override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, handleTextEditingCommand(event) {
+            return
+        }
+
         if event.type == .keyDown, handleKeyDown(event) {
             return
         }
@@ -41,6 +45,53 @@ final class SpacesSwitcherPanel: NSPanel {
         }
 
         super.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if handleTextEditingCommand(event) {
+            return true
+        }
+
+        return super.performKeyEquivalent(with: event)
+    }
+
+    @discardableResult
+    private func handleTextEditingCommand(_ event: NSEvent) -> Bool {
+        guard
+            let fieldEditor = firstResponder as? NSTextView,
+            let character = event.charactersIgnoringModifiers?.lowercased().first
+        else {
+            return false
+        }
+
+        let commandFlags = event.modifierFlags.intersection([.command, .control, .option, .shift])
+
+        guard
+            commandFlags.contains(.command),
+            !commandFlags.contains(.control),
+            !commandFlags.contains(.option)
+        else {
+            return false
+        }
+
+        switch character {
+        case "x" where !commandFlags.contains(.shift):
+            fieldEditor.cut(nil)
+        case "c" where !commandFlags.contains(.shift):
+            fieldEditor.copy(nil)
+        case "v" where !commandFlags.contains(.shift):
+            fieldEditor.paste(nil)
+        case "a" where !commandFlags.contains(.shift):
+            fieldEditor.selectAll(nil)
+        case "z" where commandFlags.contains(.shift):
+            fieldEditor.undoManager?.redo()
+        case "z":
+            fieldEditor.undoManager?.undo()
+        default:
+            return false
+        }
+
+        return true
     }
 
     @discardableResult
@@ -512,6 +563,10 @@ private final class SpaceSwitcherPanelRowView: NSView {
 }
 
 extension SpaceSwitcherPanelRowView: NSTextFieldDelegate {
+    func controlTextDidBeginEditing(_ notification: Notification) {
+        (notification.userInfo?["NSFieldEditor"] as? NSTextView)?.allowsUndo = true
+    }
+
     func controlTextDidChange(_ notification: Notification) {
         onRename(space, nameField.stringValue)
     }

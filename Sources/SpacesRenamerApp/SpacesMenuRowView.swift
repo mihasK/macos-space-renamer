@@ -195,6 +195,10 @@ final class SpacesMenuRowView: NSView {
 }
 
 extension SpacesMenuRowView: NSTextFieldDelegate {
+    func controlTextDidBeginEditing(_ notification: Notification) {
+        (notification.userInfo?["NSFieldEditor"] as? NSTextView)?.allowsUndo = true
+    }
+
     func controlTextDidChange(_ notification: Notification) {
         onRename(space, nameField.stringValue)
     }
